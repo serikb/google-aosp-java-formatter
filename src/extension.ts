@@ -14,47 +14,80 @@
     limitations under the License.
  */
 import * as vscode from 'vscode';
+import * as childProcess from 'child_process';
 
-class GoogleAOSPJavaFormatter {
-    provideDocumentFormattingEdits(document, options, token) {
-        return this.runFormatter(document, null, token);
+/**
+ * Runs google-java-format on a file and returns the newly formatted code as a
+ * `vscode.TextEdit` against the original file contents.
+ */
+function runJavaFormat(input: any, token: any, editRange?: vscode.Range) {
+    const args = ['--aosp'];
+    if (editRange) {
+        args.push(`--lines=${editRange.start.line}:${editRange.end.line}`);
     }
-    provideDocumentRangeFormattingEdits(document, range, options, token) {
-        return this.runFormatter(document, range, token);
-    }
-    runFormatter(document, range, token) {
-        this.diag.clear();
-    }
-}
-
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
-
-    // Use the console to output diagnostic information (console.log) and errors (console.error)
-    // This line of code will only be executed once when your extension is activated
-    console.log('Congratulations, your extension "google-java-format-aosp" is now active!');
-
-    // The command has been defined in the package.json file
-    // Now provide the implementation of the command with registerCommand
-    // The commandId parameter must match the command field in package.json
-    let disposable = vscode.commands.registerCommand('google-java-format-aosp.helloWorld', () => {
-        // The code you place here will be executed every time your command is executed
-        vscode.languages.registerDocumentFormattingEditProvider({
-            language: 'java',
-            scheme: 'file',
-        }, new GoogleAOSPJavaFormatter());
-        vscode.languages.registerDocumentRangeFormattingEditProvider({
-            language: 'java',
-            scheme: 'file',
-        }, new GoogleAOSPJavaFormatter());
-
-        // Display a message box to the user
-        vscode.window.showInformationMessage('Hello World from Google Java Format AOSP!');
+    args.push('-');
+    return new Promise((resolve, reject) => {
+        var _a;
+        const proc = childProcess.execFile(
+            'google-java-format', args, (err, stdout, stderr) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    resolve(stdout);
+                }
+        });
+        if (token) {
+            token.onCancellationRequested(() => {
+                proc.kill();
+            });
+        }
+        (_a = proc.stdin) === null || _a === void 0 ? void 0 : _a.end(input);
     });
-
-    context.subscriptions.push(disposable);
 }
-
-// this method is called when your extension is deactivated
-export function deactivate() { }
+class Formatter {
+    diags: vscode.DiagnosticCollection;
+    constructor() {
+        this.diags =
+            vscode.languages.createDiagnosticCollection('google-java-format');
+    }
+    provideDocumentFormattingEdits(document: any, options: any, token: any) {
+        return this.runFormatter(document, token);
+    }
+    provideDocumentRangeFormattingEdits(document: any, range: vscode.Range, options: any, token: any) {
+        return this.runFormatter(document, token, range);
+    }
+    runFormatter(document: any, token: any, range?: vscode.Range) {
+        this.diags.clear();  // Clear away any left-over errors from an earlier run.
+        const input = document.getText();
+        return runJavaFormat(input, token, range)
+            .then(formatted => {
+                const wholeFileRange = new vscode.Range(
+                    document.positionAt(0), document.positionAt(input.length));
+                return [vscode.TextEdit.replace(wholeFileRange, formatted as string)];
+            })
+            .catch((err) => {
+                throw err;
+            });
+    }
+}
+/**
+ * Registers google-java-format as the Java formatter when a Java file is
+ * loaded.
+ */
+function registerFormatter() {
+    const editProvider = new Formatter();
+    const documentFilter = {
+        language: 'java',
+        scheme: 'file',
+    };
+    return vscode.Disposable.from(
+        vscode.languages.registerDocumentFormattingEditProvider(
+            documentFilter, editProvider),
+        vscode.languages.registerDocumentRangeFormattingEditProvider(
+            documentFilter, editProvider));
+}
+/** Called when the extension is activated. */
+function activate(context: any) {
+    context.subscriptions.push(registerFormatter());
+}
+exports.activate = activate;
