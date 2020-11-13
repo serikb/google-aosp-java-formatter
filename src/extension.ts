@@ -2,6 +2,18 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 
+class GoogleAOSPJavaFormatter {
+	provideDocumentFormattingEdits(document, options, token) {
+		return this.runFormatter(document, null, token);
+	}
+	provideDocumentRangeFormattingEdits(document, range, options, token) {
+		return this.runFormatter(document, range, token);
+	}
+	runFormatter(document, range, token) {
+		this.diag.clear();
+	}
+}
+
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -15,6 +27,14 @@ export function activate(context: vscode.ExtensionContext) {
 	// The commandId parameter must match the command field in package.json
 	let disposable = vscode.commands.registerCommand('google-java-format-aosp.helloWorld', () => {
 		// The code you place here will be executed every time your command is executed
+		vscode.languages.registerDocumentFormattingEditProvider({
+			language: 'java',
+			scheme: 'file',
+		}, new GoogleAOSPJavaFormatter());
+		vscode.languages.registerDocumentRangeFormattingEditProvider({
+			language: 'java',
+			scheme: 'file',
+		}, new GoogleAOSPJavaFormatter());
 
 		// Display a message box to the user
 		vscode.window.showInformationMessage('Hello World from Google Java Format AOSP!');
